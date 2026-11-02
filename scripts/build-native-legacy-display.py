@@ -41,6 +41,10 @@ header='''// SPDX-License-Identifier: BSD-2-Clause-Patent
 #include <IOKit/IOService.h>
 #include <libkern/libkern.h>
 struct OriginalLegacySwapRequest;
+// Same 21H461 ABI as UniXNU-sheng/scripts/build-gop-legacy-display.py.
+struct OriginalLegacyStateRequest {uint32_t skipRequested,requested,skipPowered,powered;uint8_t changed;uint8_t pad[11];};
+static_assert(sizeof(OriginalLegacyStateRequest)==28,"Original state request extent");
+static constexpr unsigned kRequestRect0=17,kRequestRect1=81,kRequestMasks=792,kRequestOptions=804,kRequestDims=816,kRequestSurfaces=2624;
 class IOMobileFramebufferLegacy : public IOService {
  OSDeclareAbstractStructors(IOMobileFramebufferLegacy)
  unsigned char originalPrivate[0x18a0-sizeof(IOService)];
@@ -99,6 +103,7 @@ for i in range(168,358):
     elif i==295:header+=' virtual void completeCurrentSwap();\n'
     elif i==337:header+=' virtual IOReturn collectCompletionReports(uint32_t,void *,uint32_t *,uint32_t)=0;\n'
     elif i==288:header+=' virtual bool startHardware();\n'
+    elif i==354:header+=' virtual int applyStateRequest(OriginalLegacyStateRequest *,bool);\n'
     elif i==301:header+=' virtual bool getRefreshAttributes(uint64_t *,bool);\n'
     elif i in pure:header+=f' virtual __attribute__((noreturn)) void opaque{i}()=0;\n'
     else:header+=f' virtual __attribute__((deprecated("Unclassified ABI: never call from source"))) void opaque{i}();\n'
