@@ -103,6 +103,16 @@ for i in range(168,358):
     elif i in pure:header+=f' virtual __attribute__((noreturn)) void opaque{i}()=0;\n'
     else:header+=f' virtual __attribute__((deprecated("Unclassified ABI: never call from source"))) void opaque{i}();\n'
 header+='};\nstatic_assert(sizeof(IOMobileFramebufferLegacy)==0x18a0,"Actual original instance extent");\n'
+# The shared framebuffer source consumes these generated ABI definitions.
+# 213 and 337 have concrete implementations; all remaining abstract slots
+# retain the guarded refusal backend rather than an invented implementation.
+leaves = [i for i in pure if i not in (213,337)]
+require(len(leaves) == 7 and all(168 <= i < 358 for i in leaves),
+        'Expected seven guarded original Legacy backend leaves')
+header += '#define NATIVE_LEGACY_LEAVES(X) ' + ' '.join(f'X({i})' for i in leaves) + '\n'
+# Independently checked below against the unchanged original vsync sender's
+# ldr x8,[x8,#5592] before any archive can be delivered.
+header += 'static constexpr unsigned kLegacyVsyncClients = 5592;\n'
 (OUT/'OriginalLegacyFramebufferABI.h').write_text(header)
 print(run(['python3',ROOT/'scripts/build-arm-driver.py','NativeLegacyDisplay'],text=True),end='')
 obj=OUT/'NativeLegacyDisplay.o';raw=obj.read_bytes();image=macho(raw)
