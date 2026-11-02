@@ -46,7 +46,7 @@ python3 "$ROOT/scripts/fuxi-usb-boot-progress.py" "$ROOT/.cache/xnu-work"
 if text.count(anchor) != 1:
     raise SystemExit('kernel patch completion anchor changed')
 text = text.replace(anchor, apply + anchor)
-anchor = 'make -C .cache/xnu-work "${XNU_BUILD_TARGET:-build}"'
+anchor = 'make "${XNU_HOST_MAKE_ARGS[@]}" -C .cache/xnu-work "${XNU_BUILD_TARGET:-build}"'
 flags = '''# Preserve all previously selected per-object options (PMGR, root probes,
 # native console and VM flags); append USB only to its six translation units.
 for qud_object in pe_kprintf.o debug.o printf.o serial_console.o serial_general.o bsd_init.o; do

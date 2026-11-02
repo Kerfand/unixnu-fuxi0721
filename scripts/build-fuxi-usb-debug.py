@@ -6,9 +6,23 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 root = Path(__file__).resolve().parents[1]
 module = root / '.cache/fuxi-qud-module'
+# A restored link-only reference already has compile records, so the framework
+# may skip its bootstrap recipe. Stage/apply USB before this archive as well.
+subprocess.run([sys.executable, root / 'scripts/prepare-fuxi-usb-debug.py',
+                '--module', root / 'drivers/QcomXnuUsbDebug', '--xnu', root / 'refer/xnu',
+                '--output', module], check=True)
+patcher = module / 'scripts/xnu_patches.py'
+state = json.loads(subprocess.check_output([sys.executable, patcher, 'status',
+                   '--xnu', root / '.cache/xnu-work', '--profile', 'darwin23-fuxi'], text=True))
+if state['state_before'] == 'ready':
+    subprocess.run([sys.executable, patcher, 'apply', '--xnu', root / '.cache/xnu-work',
+                    '--profile', 'darwin23-fuxi'], check=True)
+elif state['state_before'] != 'applied':
+    raise SystemExit('USB source integration is not ready: '+str(state))
 out = root / '.cache/fuxi-qud-build'
 records = root / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837'
 llvm = Path('/opt/homebrew/opt/llvm/bin')
@@ -27,9 +41,12 @@ if not llvm.is_dir():
         if '-D_POSIX_C_SOURCE' not in source and "'-std=c11'," in source:
             staged_check.write_text(source.replace("'-std=c11',",
                                                  "'-std=c11', '-D_POSIX_C_SOURCE=200809L',", 1))
-def run(arguments):
+def run(arguments, host=False):
     command = [str(v) for v in arguments]
-    result = subprocess.run(command, cwd=root, capture_output=True, text=True)
+    env = os.environ.copy()
+    if host:
+        env.pop('CCC_OVERRIDE_OPTIONS', None)
+    result = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True)
     print(result.stdout, end='')
     if result.returncode:
         print(result.stderr, end='')
@@ -41,8 +58,13 @@ def run(arguments):
                         print(log.name, content[-6500:])
         raise SystemExit(result.returncode)
 
+# The upstream checks require a new output directory on every run.
+for previous in (root / '.cache/fuxi-qud-model-check', out, root / '.cache/fuxi-qud-xnu-check'):
+    if previous.exists():
+        previous.rename(previous.with_name(previous.name + '.previous-' + str(time.time_ns())))
+
 run([sys.executable, module / 'tests/check.py', '--target-clang', llvm / 'clang',
-     '--output', root / '.cache/fuxi-qud-model-check'])
+     '--output', root / '.cache/fuxi-qud-model-check'], host=True)
 matches = list(records.glob('**/pe_kprintf.o.json'))
 if len(matches) != 1:
     raise SystemExit('missing or ambiguous actual PE compile record')

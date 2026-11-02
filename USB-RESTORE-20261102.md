@@ -76,3 +76,41 @@ original executable or inheritance checks are removed.
 共享显示驱动还需要生成头中的 NATIVE_LEGACY_LEAVES 和 kLegacyVsyncClients。
 从审计结果生成七个拒绝执行的抽象叶子；队列偏移 +5592 沿用原始 vsync
 发送指令的核验。保留原始代码与继承关系检查。
+
+
+## Local build and template packaging / 本地构建与打包
+
+The full 21H461 kernel compiled, linked and prelinked on Ubuntu-26.04.
+USB model tests, six-unit enabled/disabled integration and all five linked USB
+symbols passed. Runtime enumeration remains unverified. Kernel SHA256:
+`ff9b64922f9664a9b342d2478bc4133f70e33a1e0be7c2e65e09877032798e7e`.
+
+完整内核已在 Ubuntu-26.04 编译、链接及预链接成功。USB 模型、六文件开关
+集成及最终五个 USB 符号检查通过；尚未进行本轮实机枚举验证。
+
+Linux host steps are included in the board recipe. Both UFS and VirtioBlock
+now select the actual verified-root bundle personality. Shared GPU sources
+receive a revision-checked patch: Darwin23's real task background policy selects
+queue priority; unavailable independent GPU-role diagnostics report -1. The
+newer optional pmap mapping diagnostic is not enabled. Memory release behavior
+is retained. Board code uses the current VM interface, eleven buffer records
+and dynamic BO allocation, with obsolete fixed-pool diagnostics removed.
+
+板级配方补齐 Linux 宿主步骤；UFS 和 VirtioBlock 使用真正的 verified-root
+bundle 构建。GPU 补丁固定检查共享驱动版本，使用 Darwin23 实际后台策略，
+独立 GPU 角色不可用时记为 -1；不启用较新 pmap 可选诊断，保留内存释放流程。
+板级代码采用当前 VM 接口、11 个缓冲区记录及动态 BO 分配。
+
+`scripts/local/` preserves the workstation helpers (default workspace
+`/home/xiaomi/fuxi17-usb-local-20261102`); adjust paths for another machine.
+No SDK, firmware, signing private keys or boot binaries are stored in Git.
+工作站脚本在 scripts/local，换机器需调整默认路径。缺少 Novatek 触摸固件，
+本轮不能宣称触摸可用。
+
+`scripts/bootimage.py --template CURRENT.img --ramdisk payload.img -o boot.img`
+is a local header-v3 template packer. It preserves firmware, BootShim, DTB,
+Android parameters and payload size. The supplied t32-fast.img template produced
+boot SHA256 `eeb21ba561029eae7062233b7b025b7e8b6a136852f0dfeee86f52e650244ca3`.
+Packing checks verified the kernel readback, three trust modules, all three GPU
+executable CDHashes, fixed Apple trust inputs and unchanged Data/GPU/ADT bytes.
+该打包器保留输入模板的固件、设备树及内存保留大小；不会刷写手机。

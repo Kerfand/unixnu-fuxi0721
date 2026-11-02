@@ -49,6 +49,15 @@ for PATCH in "$ROOT"/patches/xnu/*.patch "$ROOT"/kits/NativePrelink/patches/*.pa
 done
 export XNU_AVAILABILITY_PL=$ROOT/.cache/fakeroot/usr/local/libexec/availability.pl
 python3 scripts/prepare-xnu-source.py
+XNU_HOST_MAKE_ARGS=()
+if [ "$(uname -s)" = Linux ]; then
+  python3 scripts/linux/prepare-xnu.py source
+  export PLATFORM=iPhoneOS HOST_CC="$CLT_PREFIX/bin/xnu-host-cc" MIGCOM="$CLT_PREFIX/libexec/migcom"
+  XNU_HOST_MAKE_ARGS=(TIGHTBEAMC=tightbeamc-not-supported BUILD_DSYM=0
+    MEMORY_SIZE="$(( $(getconf _PHYS_PAGES) * $(getconf PAGE_SIZE) ))"
+    SYSCTL_HW_PHYSICALCPU="$(nproc)" SYSCTL_HW_LOGICALCPU="$(nproc)"
+    LD_KERNEL_LIBS="$ROOT/.cache/fakeroot/usr/local/lib/kernel/libcc_kext.a")
+fi
 # The first pass of a new tree (XNU_BOOTSTRAP=1, set by the unixnu driver) only has to leave the compile records and
 # link.filelist for the archive builders that run after it, so it links without their archives.
 BOOTSTRAP=${XNU_BOOTSTRAP:-0}
@@ -90,10 +99,11 @@ if [ ! -d refer/libplatform/.git ]; then
   git clone --depth 1 --branch "$LIBPLATFORM_TAG" https://github.com/apple-oss-distributions/libplatform.git refer/libplatform
 fi
 export KERNEL_SDKROOT=$ROOT/.cache/fakeroot
+copy_tree() { mkdir -p "$2"; cp -R "$1/." "$2/"; }
 mkdir -p "$KERNEL_SDKROOT/usr/local/include/kernel" "$ROOT/build/xnu/obj/EXPORT_HDRS/libsa"
-ditto refer/libplatform/include "$KERNEL_SDKROOT/usr/local/include"
-ditto refer/libplatform/private "$KERNEL_SDKROOT/usr/local/include"
-ditto refer/libplatform/private/platform "$KERNEL_SDKROOT/System/Library/Frameworks/Kernel.framework/Versions/A/PrivateHeaders/platform"
+copy_tree refer/libplatform/include "$KERNEL_SDKROOT/usr/local/include"
+copy_tree refer/libplatform/private "$KERNEL_SDKROOT/usr/local/include"
+copy_tree refer/libplatform/private/platform "$KERNEL_SDKROOT/System/Library/Frameworks/Kernel.framework/Versions/A/PrivateHeaders/platform"
 if [ ! -d refer/libdispatch/.git ]; then
   git clone --depth 1 --branch "$LIBDISPATCH_TAG" https://github.com/apple-oss-distributions/libdispatch.git refer/libdispatch
 fi
@@ -113,7 +123,7 @@ for header in Path('refer/libdispatch/os').glob('*.h'):
         target.write_bytes(result.stdout)
 PY
 if [ ! -f "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers" ]; then
-  make -C .cache/xnu-work installhdrs SDKROOT=macosx ARCH_CONFIGS=ARM64 \
+  make "${XNU_HOST_MAKE_ARGS[@]}" -C .cache/xnu-work installhdrs SDKROOT=macosx ARCH_CONFIGS=ARM64 \
     MACHINE_CONFIGS=BCM2837 KERNEL_CONFIGS=DEVELOPMENT \
     RC_DARWIN_KERNEL_VERSION="$XNU_DARWIN" RC_ProjectSourceVersion="$XNU_VERSION" \
     MAKEJOBS=-j"${JOBS:-4}" OBJROOT="$ROOT/build/xnu/obj" \
@@ -122,6 +132,9 @@ if [ ! -f "$KERNEL_SDKROOT/.xnu-$XNU_VERSION-headers" ]; then
 fi
 if [ ! -f "$KERNEL_SDKROOT/usr/local/lib/kernel/libfirehose_kernel.a" ]; then
   bash scripts/build-firehose.sh
+fi
+if [ "$(uname -s)" = Linux ]; then
+  python3 scripts/linux/prepare-xnu.py libs
 fi
 # The baseline builds the kernel; `all` also checks the Apple kext export ABI.
 EXTRA_MAKE_ARGS=()
@@ -779,7 +792,7 @@ EXTRA_CFLAGS="$EXTRA_CFLAGS -DXNU_BOOT_PROGRESS=$BOOT_PROGRESS"
 # define their weak definitions satisfy the symbols and the real archives are
 # never pulled in.
 EXTRA_CFLAGS="$EXTRA_CFLAGS -DXNU_BOOTSTRAP=$BOOTSTRAP"
-make -C .cache/xnu-work "${XNU_BUILD_TARGET:-build}" SDKROOT="${XNU_SDKROOT:-iphoneos}" ARCH_CONFIGS=ARM64 \
+make "${XNU_HOST_MAKE_ARGS[@]}" -C .cache/xnu-work "${XNU_BUILD_TARGET:-build}" SDKROOT="${XNU_SDKROOT:-iphoneos}" ARCH_CONFIGS=ARM64 \
   MACHINE_CONFIGS=BCM2837 KERNEL_CONFIGS=DEVELOPMENT \
   ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG=arm64 LARGE_MEMORY_DEFINE=-UARM_LARGE_MEMORY \
   ARM64_LINK_ADDR=0xfffffff007004000 ARM64_PLKSEG_ADDR=0xfffffff004004000 \
