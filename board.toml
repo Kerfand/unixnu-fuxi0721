@@ -195,6 +195,7 @@ kernel_args = [
   "sheng-lite=1",
   "sheng-data-persist=2",
   "qcom-usb-debug=1",
+  "fuxi-panic-fastboot=30",
   "-enable_kprintf_spam",
   "-no_slto_panic",
   "ml-timeout-lock-panic-scale=40",

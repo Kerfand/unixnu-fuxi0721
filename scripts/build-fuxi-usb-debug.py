@@ -15,6 +15,17 @@ module = root / '.cache/fuxi-qud-module'
 subprocess.run([sys.executable, root / 'scripts/prepare-fuxi-usb-debug.py',
                 '--module', root / 'drivers/QcomXnuUsbDebug', '--xnu', root / 'refer/xnu',
                 '--output', module], check=True)
+# Only the iOS 17 fuxi archive opts into the post-drain hook.
+shutil.copy2(root / 'kits/sheng/BootResetCore.h', module / 'kernel/BootResetCore.h')
+board_header = module / 'soc/FuxiSm8550.h'
+if 'FUXI_PANIC_FASTBOOT' not in board_header.read_text():
+    with board_header.open('a') as stream:
+        stream.write('\n#define FUXI_PANIC_FASTBOOT 1\n')
+if 'fuxi_panic_fastboot(void)' not in (module / 'kernel/QcomXnuUsbDebug.c').read_text():
+    subprocess.run(['patch', '-p1', '--batch', '--forward', '-i',
+                    str(Path(__file__).with_name('fuxi-usb-panic-fastboot.patch'))],
+                   cwd=module, check=True)
+
 patcher = module / 'scripts/xnu_patches.py'
 state = json.loads(subprocess.check_output([sys.executable, patcher, 'status',
                    '--xnu', root / '.cache/xnu-work', '--profile', 'darwin23-fuxi'], text=True))
